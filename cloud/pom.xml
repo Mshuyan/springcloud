@@ -12,11 +12,13 @@
     <artifactId>cloud</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>cloud</name>
-    <description>Demo project for Spring Boot</description>
+    <packaging>pom</packaging>
 
     <modules>
         <module>cloud-eureka</module>
         <module>cloud-common</module>
+        <module>cloud-producer</module>
+        <module>cloud-customer</module>
     </modules>
 
     <properties>
@@ -41,6 +43,16 @@
             <dependency>
                 <groupId>com.learn</groupId>
                 <artifactId>cloud-common</artifactId>
+                <version>0.0.1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>com.learn</groupId>
+                <artifactId>cloud-producer</artifactId>
+                <version>0.0.1-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>com.learn</groupId>
+                <artifactId>cloud-customer</artifactId>
                 <version>0.0.1-SNAPSHOT</version>
             </dependency>
         </dependencies>

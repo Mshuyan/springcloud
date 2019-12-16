@@ -612,6 +612,27 @@
 
     是否作为主bean，应该是bean出现冲突时使用的，先不管他
 
+### @RequestLine
+
++ 作用
+
+  指定声名的接口的请求方法及路径
+
+  ```java
+  @RequestLine("GET /user/info")
+  # 相当于
+  @GetMapping("/user/info")
+  ```
+
++ 需要全局配置`Contract`
+
+  ```java
+  @Bean
+  public Contract contract(){
+    return new feign.Contract.Default();
+  }
+  ```
+
 ### FeignClient相关组件
 
 > 参考资料：[feign自定义组件（2）](https://blog.csdn.net/haozhishang/article/details/93882865) 

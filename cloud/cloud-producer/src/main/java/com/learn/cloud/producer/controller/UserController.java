@@ -5,6 +5,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
+
 /**
  * @author shuyan
  */
@@ -14,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserController {
 
     @GetMapping("/name")
-    public String getUserName(){
-        return "tom";
+    public String getUserName(Instant time){
+        return time.toString();
     }
 }

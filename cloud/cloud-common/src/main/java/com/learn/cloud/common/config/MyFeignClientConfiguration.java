@@ -1,6 +1,6 @@
 package com.learn.cloud.common.config;
 
-import feign.Retryer;
+import feign.Contract;
 import org.springframework.context.annotation.Bean;
 
 /**
@@ -9,7 +9,7 @@ import org.springframework.context.annotation.Bean;
 public class MyFeignClientConfiguration {
 
     @Bean
-    public Retryer retryer(){
-        return new Retryer.Default();
+    public Contract contract(){
+        return new Contract.Default();
     }
 }

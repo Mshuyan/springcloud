@@ -101,8 +101,6 @@
   </dependency>
   ```
 
-+ 启动类上加上`@EnableEurekaClient`注解，该项目以`eureka`的client端启动
-
 + 配置文件
 
   ```properties
@@ -614,6 +612,8 @@
 
 ### @RequestLine
 
+不建议使用
+
 + 作用
 
   指定声名的接口的请求方法及路径
@@ -629,6 +629,7 @@
   ```java
   @Bean
   public Contract contract(){
+    // 这样配置后，只能使用 @RequestLine 注解了
     return new feign.Contract.Default();
   }
   ```
@@ -874,6 +875,28 @@ public class FeignFormatterRegister implements FeignFormatterRegistrar {
   注册1个类型转换器，指定如何将Date类型转换为字符串
 
   另外建议使用`Instant`传递时间，而不是`Date`
+
+## Sentinel
+
+### 介绍
+
++ 由于`Hystrix`已停止更新，需要使用其他产品替换，`Hystrix`官方推荐`resilience4j`，但是很多人选择了`Alibaba`的`Sentinel`，对比3者的`github`星数，果断选择`sentinel`
+
+  + hystrix：18.8k
+  + resilience4j：4.8k
+  + sentinel：10.2k
+
++ 断路器
+
+  上述3种中间件都是断路器
+
+  如果A服务出现问题，B服务请求A服务，则B服务也会阻塞住，C调用B时，C也会阻塞住，这样造成`雪崩`效应，导致整个集群瘫痪
+
+  熔断器的作用就是，当1个服务不可用时，即时放弃请求，避免蔓延到整个集群
+
+### 使用
+
+
 
 ## 技巧
 

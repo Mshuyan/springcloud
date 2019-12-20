@@ -7,6 +7,6 @@ import org.springframework.context.annotation.Configuration;
  * @author will
  */
 @Configuration
-@ComponentScan("com.learn.cloud.common.config")
+@ComponentScan("com.learn.cloud.common")
 public class CommonConfig {
 }

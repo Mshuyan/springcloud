@@ -215,6 +215,204 @@
 
 两者功能差不多，如果服务发现使用的是`eureka`，则使用`@EnableEurekaClient`，否则使用`@EnableDiscoveryClient`
 
+## Nacos
+
+### 介绍
+
++ `eureka`已停止更新，替代方案选择`nacos`
++ `c/s`模型，服务端下载后直接启动
+
+### server端
+
+#### 编译源码
+
+> 目前最新版本为`1.1.4`，但是该版本要使用`mysql8.0`需要修改源码
+
++ 下载地址：https://github.com/alibaba/nacos/releases，下载最新``Release`版本的源码
+
++ 修改源码
+
+  + 将父`pom`中mysql版本修改为`8.0.17`
+
+  + 修改`MysqlHealthCheckProcessor.java`
+
+    ```java
+    import com.mysql.jdbc.jdbc2.optional.MysqlDataSource;
+    // 修改为
+    import com.mysql.cj.jdbc.MysqlDataSource;
+    ```
+
+  + 在右侧`Maven Project`中点击`Excute Maven Goal`，输入`mvn -Prelease-nacos clean install -U`，点击`Excute`进行打包
+
+    ![image-20191219215821750](README.assets/image-20191219215821750.png) 
+
+  + 编译成功后将`./distribution/target/nacos-server-xxx.zip`文件拷出，该文件就是运行时需要使用的文件
+
++ 解压后目录介绍
+
+  + bin：脚本目录
+
+    + startup.cmd、startup.sh：启动脚本
+    + shutdown.cmd、shutdown.sh：停止脚本
+
+  + config
+
+    + application.properties
+
+      配置文件
+
+    + application.properties.example
+
+      其他配置项示例，需要使用时将对应的配置项配置在`application.properties`中
+
+    + cluster.conf.example：
+
+      集群配置项示例，需要使用时去掉`.example`即可
+
+    + nacos-logback.xml
+
+      日志配置
+
+    + nacos-mysql.sql
+
+      `mysql`数据库脚本
+
+    + schema.sql
+
+      `Derby`数据库脚本
+
+  + target
+
+    + nacos-server.jar
+
+      服务jar包
+
+#### 准备
+
++ 创建数据库
+
+  > 默认nacos将数据存储在内存（derby）中，但是这样每次重启都需要重新配置，所以建议使用mysql存储数据
+
+  + 创建数据库
+  + 执行`nacos-mysql.sql`脚本
+
++ 配置mysql
+
+  `application.properties`配置文件中增加如下配置
+
+  ```properties
+  # mysql
+  spring.datasource.platform=mysql
+  db.num=1
+  db.url.0=jdbc:mysql://127.0.0.1:3306/nacos_devtest?useUnicode=true&characterEncoding=utf8&autoReconnect=true&failOverReadOnly=false&useSSL=false&useTimezone=true&serverTimezone=GMT%2B8
+  db.user=root
+  db.password=rootroot
+  ```
+
+  注：最好使用主从备份数据库，或高可用数据库
+
+#### 部署模式
+
+##### 单机模式
+
+使用如下命令启动：
+
+```bash
+$ ./startup.sh -m standalone
+```
+
+##### 集群部署
+
++ nacos服务端集群架构图（`域名+VIP`模式）
+
+  <img src="README.assets/image-20191220114721330.png" alt="image-20191220114721330" style="zoom:50%;" /> 
+
+  其中`VIP`指的是`nginx`这种代理工具，实现原理是：
+
+  > 使用`nginx`代理域名`nacos.com`，在`nginx`中配置负载均衡，将请求分发到不同的`nacos`服务端
+
++ 要求
+
+  + 最好3个以上nacos服务端节点
+  + 必须使用`mysql`
+
++ 部署流程
+
+  + 配置`cluster.conf`，配置各节点`ip:port`
+
+    ```conf
+    192.168.28.130:8848
+    192.168.28.130:8849
+    192.168.28.130:8850
+    ```
+
+  + 使用`./startup.sh`启动各个`nacos`服务端节点
+
+  + 配置`nginx`
+
+    ```json
+    upstream nacos {
+        server 192.168.28.130:8848;
+        server 192.168.28.130:8849;
+        server 192.168.28.130:8850;
+    }
+    
+    server {
+        listen 80;
+    
+        server_name test.nacos.com;
+    
+        location / {
+            proxy_pass http://nacos;
+        }
+    }
+    ```
+
+  + 配置`host`文件将上述域名指向该`nginx`服务器的ip
+
++ 使用
+
+  + 此时，客户端就可以通过该域名找到`nacos`服务端集群中的1个节点了
+
+  + 个人观点
+
+    每台机器都需要配置`host`文件很麻烦，客户端使用nginx服务器的ip当做nacos服务端，nginx中将自己的IP分发到不同的节点
+
+##### 多集群部署
+
+> 暂时用不到
+
+#### 概念
+
++ 命名空间
+
+  用来区分测试环境、生产环境
+
++ 服务
+
+  每种服务，包括很多个相同的服务实例，这些实例可能来自不同的集群（机房）
+
++ 分组
+
+  就是单纯的把1个服务中的所有实例进行一下分组
+
++ 集群
+
+  可以理解为机房
+
++ 服务实例
+
+  每个启动的jar包就是1个服务实例
+
++ 保护阈值
+
+  保护阈值的范围是0~1
+  服务的健康比例=服务的健康实例/总实例个数
+  当服务健康比例<=保护阈值时候，无论实例健不健康都会返回给调用方
+  当服务健康比例>保护阈值的时候，只会返回健康实例给调用方
+
++ 
+
 ## Ribbon
 
 ### 介绍

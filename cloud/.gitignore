@@ -29,3 +29,9 @@ build/
 
 ### VS Code ###
 .vscode/
+!cloud-nacos/bin/*.sh
+!cloud-nacos/bin/*.cmd
+!cloud-nacos/conf/**
+!cloud-nacos/src/**
+cloud-nacos/**
+

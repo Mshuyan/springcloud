@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import java.time.Instant;
 
 /**
+ * feign 在将接口转换为http协议时默认不支持 instant 类型，自己加上转换器
  * @author shuyan
  */
 @Component

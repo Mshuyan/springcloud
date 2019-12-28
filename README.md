@@ -221,6 +221,7 @@
 
 + `eureka`已停止更新，替代方案选择`nacos`
 + `c/s`模型，服务端下载后直接启动
++ 集成了服务注册发现、配置中心的功能
 
 ### server端
 
@@ -325,7 +326,7 @@ $ ./startup.sh -m standalone
 
 + nacos服务端集群架构图（`域名+VIP`模式）
 
-  <img src="README.assets/image-20191220114721330.png" alt="image-20191220114721330" style="zoom:50%;" /> 
+  <img src="README.assets/image-20191220114721330.png" alt="image-20191220114721330" style="zoom:50%;"/> 
 
   其中`VIP`指的是`nginx`这种代理工具，实现原理是：
 
@@ -339,6 +340,8 @@ $ ./startup.sh -m standalone
 + 部署流程
 
   + 配置`cluster.conf`，配置各节点`ip:port`
+
+    不能使用`localhost`或`127.0.0.1`
 
     ```conf
     192.168.28.130:8848
@@ -411,7 +414,204 @@ $ ./startup.sh -m standalone
   当服务健康比例<=保护阈值时候，无论实例健不健康都会返回给调用方
   当服务健康比例>保护阈值的时候，只会返回健康实例给调用方
 
++ 权重
+
+  数值0~100，数值越大，分配的机会越大
+  
++ 服务路由方式
+
+  *暂不了解*
+
++ 元数据
+
+  *暂不了解*
+
+#### 管理页面
+
+> 访问：http://localhost:8848/nacos，即可访问管理界面，默认用户名密码都是`nacos`
+
++ 配置管理
+
+  + 配置l列表
+
+    用于管理配置文件
+
+  + 历史版本
+
+    所有配置的发布记录都在这里
+
+  + 监听查询
+
+    查看哪些机器在使用指定的配置
+
++ 服务管理
+
+  + 服务列表
+
+    用于展示客户端信息
+
+  + 订阅者列表
+
+    在`服务名称`中输入服务提供者的`服务名`，点击查询，即可查看该服务被哪些服务调用了
+
++ 命名空间
+
+  用于配置有哪些环境，如生产、测试
+
++ 集群管理
+
+  用于展示都有哪些nacos服务端节点
+
+### 客户端
+
+#### 依赖
+
++ 使用`alibaba cloud`都需要在`dependencyManagement`引入如下依赖
+
+  ```xml
+  <dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-alibaba-dependencies</artifactId>
+    <version>2.1.1.RELEASE</version>
+    <type>pom</type>
+    <scope>import</scope>
+  </dependency>
+  ```
+
++ 如需使用配置中心功能，引入如下依赖
+
+  ```xml
+  <dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+  </dependency>
+  ```
+
++ 如需使用服务注册发现功能，引入如下依赖
+
+  ```xml
+  <dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+  </dependency>
+  ```
+
+#### 配置文件
+
+如果使用了配置中心功能，则必须配置在`bootstrap.properties`文件中，否则可以使用`application.properties`文件
+
+```properties
+# 不能使用localhost 或 127.0.0.1
+spring.cloud.nacos.server-addr=192.168.1.204:8848
+```
+
+增加该配置后即可使用nacos提供的功能
+
+### 服务发现
+
+#### 配置
+
+使用`spring.cloud.nacos.discovery.xxx`进行配置
+
+#### 服务端重启能否自动注册
+
+集群模式启动时可以
+
+### 配置中心
+
+#### 使用配置
+
++ nacos客户端使用`dataId`寻找自己要使用的配置
+
++ `dataId` 的完整格式如下：
+
+  ```
+  ${prefix}-${spring.profile.active}.${file-extension}
+  ```
+
+  - `prefix` 默认为 `spring.application.name` 的值，也可以通过配置项 `spring.cloud.nacos.config.prefix`来配置。
+  - `spring.profile.active` 即为当前环境对应的 profile，**当 `spring.profile.active` 为空时，对应的连接符 `-` 也将不存在，dataId 的拼接格式变成 `${prefix}.${file-extension}`**
+  - `file-exetension` 为配置内容的数据格式，可以通过配置项 `spring.cloud.nacos.config.file-extension` 来配置。目前只支持 `properties` 和 `yaml` 类型。
+
+#### 配置
+
+使用`spring.cloud.nacos.config.xxx`进行配置
+
+#### @RefreshScope
+
++ 范围
+
+  使用`@Value`等注解引用了配置文件中配置的地方，类上或方法上可以使用该注解
+
++ 作用
+
+  不使用该注解，当配置修改时，应用仍然使用原来的值；使用该注解后，运行的代码中使用了配置文件中的配置时会主动去刷新最新的配置
+
+#### 灰度配置
+
++ 什么叫灰度配置
++ 如何配置
+  + 在`编辑配置`时，点击`更多高级选项`，勾选`Beta发布`，输入ip（逗号分隔），编辑好配置，点击`发布Beta`，即可将该配置发布到指定的机器
+  + 完成`Beta发布`后，`发布Beta`按钮会变为`停止发布Beta`，点击`停止发布Beta`即可停止，所有配置恢复
+  + 如果过程中点击发布，则将配置发布到所有机器
+
+### *TODO 服务监控*
+
+> 这块没弄明白，有时间需要好好学学`prometheus`和`Grafana`
+
+#### nacos开启prometheus支持
+
+`application.properties`配置文件中配置
+
+```properties
+management.endpoints.web.exposure.include=*
+```
+
+访问`{ip}:8848/nacos/actuator/prometheus`，看是否能访问到metrics数据
+
+#### prometheus
+
++ 介绍
+
+  + 用于采集各个应用的数据
+  + 自身也具备图形化界面等功能，功能很强大，不过有一定难度，可以先使用`Grafana`，熟练后再过度到`prometheus`
+  + 下载地址：https://prometheus.io/download/
+    + mac：darwin版本
+
++ 配置启动
+
+  + 修改`prometheus.yml`
+
+    ```yml
+    metrics_path: '/nacos/actuator/prometheus'
+    static_configs:
+    	- targets:['{ip1}:8848','{ip2}:8848','{ip3}:8848']
+    ```
+
+  + 启动
+
+    ```bash
+    $ ./prometheus --config.file="prometheus.yml"
+    ```
+
++ 访问
+
+  通过访问`http://{ip}:9090/graph`，搜索`nacos_monitor`可以看到prometheus的采集数据
+
+#### Grafana
+
++ 介绍
+
+  + 也是服务监控软件，比`普罗米修斯`简单一些
+  + 默认端口`3000`，默认账号密码`admin`
+
++ 安装启动
+
+  参见：https://grafana.com/docs/grafana/latest/
+
 + 
+
+
 
 ## Ribbon
 
@@ -426,6 +626,8 @@ $ ./startup.sh -m standalone
   `eureka`的`server`和`client`端依赖中均包含了`ribbon`的依赖，这里不需要单独引入
 
 + 在声名`RestTemplate`的bean上加上`@LoadBalanced`注解
+
+  只有需要使用`RestTemplete`调用服务时才需要这个配置，并且必须使用`@LoadBalanced`，使用`Feign`调用时不用配置这个
 
   ```java
   @Bean
@@ -790,15 +992,11 @@ $ ./startup.sh -m standalone
 
   + fallBack
 
-    定义容错的处理类，当调用远程接口失败或超时时，会调用对应接口的容错逻辑，fallback指定的类必须实现@FeignClient标记的接口
-
-    ==详情参见Hystrix相关内容==
+    定义容错的处理类，当调用远程接口失败或超时时，会调用对应接口的容错逻辑，fallback指定的类必须实现@FeignClient标记的接口，并且注册到`spring`容器中
 
   + fallbackFactory
 
     用于生成fallback类示例，通过这个属性我们可以实现每个接口通用的容错逻辑，减少重复的代码
-
-    ==详情参见Hystrix相关内容==
 
   + path
 
@@ -1049,6 +1247,18 @@ public class FeignFormatterRegister implements FeignFormatterRegistrar {
 }
 ```
 
+### 全局Fallback
+
+> 参见：https://blog.csdn.net/ttzommed/article/details/90669320
+
+代码参见例程中：
+
++ `FunFeignFallback`
++ `FunFallbackFactory`
++ `FunSentinelFeign`
++ `FunSentinelInvocationHandler`
++ `FunFeignFallbackConfiguration`
+
 ### 踩坑记录
 
 #### GET请求使用Pojo类传递参数报405
@@ -1091,8 +1301,619 @@ public class FeignFormatterRegister implements FeignFormatterRegistrar {
   如果A服务出现问题，B服务请求A服务，则B服务也会阻塞住，C调用B时，C也会阻塞住，这样造成`雪崩`效应，导致整个集群瘫痪
 
   熔断器的作用就是，当1个服务不可用时，即时放弃请求，避免蔓延到整个集群
+  
++ 限流器
 
-### 使用
+  对同一个id的资源请求过多时，可以根据qps进行限流
+
+### 依赖
+
+```xml
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>
+</dependency>
+```
+
+### 控制台
+
+#### 使用
+
++ 下载地址：https://github.com/alibaba/Sentinel/releases
+
+  下载`sentinel-dashboard-xxx.jar`
+
++ 启动命令
+
+  ```bash
+  nohup java -Dserver.port=8080 -Dcsp.sentinel.dashboard.server=localhost:8080 -Dproject.name=sentinel-dashboard -jar sentinel-dashboard-1.7.0.jar &
+  ```
+
+  修改端口从启动命令中修改
+
+  启动后即可访问控制台所在服务器ip+指定的端口访问控制台，默认账号密码都是`sentinel`
+
++ 应用接入控制台
+
+  cloud应用中`application.properties`
+
+  ```properties
+  # 控制台下发指令的接口
+  spring.cloud.sentinel.transport.port=8719
+  # 控制台地址
+  spring.cloud.sentinel.transport.dashboard=172.20.10.2:8080
+  ```
+
+#### *TODO 讲解*
+
+> 参见：https://github.com/alibaba/Sentinel/wiki/%E6%8E%A7%E5%88%B6%E5%8F%B0
+
+### 资源
+
+#### 介绍
+
++ 资源，可以是任何东西，服务，服务里的方法，甚至是一段代码
++ 资源定义好之后，才可以对资源进行限流、降级等操作
+
+#### 定义资源（埋点）
+
++ 默认
+
+  sentinel默认为所有的接口提供了埋点
+
++ 使用`@SentinelResource`注解定义资源
+
+  用于对不是接口的方法埋点，仅限于被`spring`管理的`Bean`中的方法
+  
+  ```java
+@Service
+  public class ClerkServiceImpl implements ClerkService {
+  
+      @Override
+      @SentinelResource("test")
+      public void test() {
+          System.out.println("测试埋点");
+      }
+  }
+  ```
+  
+
+#### BlockException
+
+资源被限流时，会抛出该异常
+
+#### @SentinelResource
+
++ value
+
+  资源名称，必须指定
+
++ entryType
+
+  IN：入口流量，调用该资源的流量
+
+  OUT：出口流量，该资源调用其他资源的流量
+
+  部分规则的判断会区分流量类型
+
++ resourceType
+
+  资源类型
+
+  *没找到什么资料，先不管*
+
++ blockHandler
+
+  函数名称，用于处理被限流后，处理`BlockException`的方法名
+
+  + 若未配置，将向上抛
+
+  + 必须为`public`
+
+  + 返回值类型必须与原方法匹配
+
+  + 参数类型需要与原方法匹配，`并`最后多出1个`BlockException`类型的参数
+
+  + `blockHandler`函数默认需要和原方法在同一个类中
+
+    如果你不想让异常处理方法跟业务方法在同一个类中，可以使用`blockHandlerClass`指定处理该异常的类，此时对应的函数必需为`static`函数
+
++ blockHandlerClass
+
+  用于配置使用哪个类中的方法处理`BlockException`
+
++ fallback
+
+  函数名称，除`BlockException`和`exceptionsToIgnore`指定的异常以外的所有异常，都可以使用该方法处理
+
+  + 若未配置，将向上抛
+
+  + 返回值类型必须与原方法匹配
+  + 参数类型需要与原方法匹配，`或`最后多出1个`Exception`类型的参数
+  + 默认需要和原方法在同一个类中。若希望使用其他类的函数，则可以指定`fallbackClass`为对应的类的 Class 对象，注意对应的函数必需为 static 函数
+
++ defaultFallback
+
+  + 作用与`fallback`相同，不过优先级比`fallback`要低
+  + 指定得方法可以无参或只有异常参数
+
++ fallbackClass
+
+  指定`fallback`方法所在类
+
++ exceptionsToTrace
+
+  处理哪些异常
+
++ exceptionsToIgnore
+
+  忽略哪些异常
+
+#### 配置资源
+
++ 单独配置
+
+  使用`@SentinelResource`注解
+
++ 全局
+
+  + blockhandler
+
+    实现`UrlBlockHandler`接口，并注册为`Bean`
+
+    ```java
+    @Component
+    public class MyUrlBlockHandler implements UrlBlockHandler {
+        @Override
+        public void blocked(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, BlockException e) throws IOException {
+            httpServletResponse.setContentType("application/json;charset=UTF-8");
+            httpServletResponse.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
+            httpServletResponse.getWriter().write("已被限流");
+        }
+    }
+    ```
+
+  + fallback
+
+    + 目前没找到全局的`fallback`配置
+
+    + 但是可以使用`@SentinelResource`注解的`defaultFallback`和`fallbackClass`属性使用同一个方法处理
+
+### 规则
+
+> 参见：https://github.com/alibaba/Sentinel/wiki/%E5%A6%82%E4%BD%95%E4%BD%BF%E7%94%A8
+
+#### 流量控制规则
+
+> 参见：https://github.com/alibaba/Sentinel/wiki/%E6%B5%81%E9%87%8F%E6%8E%A7%E5%88%B6
+
++ 属性
+  + resource：资源名称
+  + grade：限流阈值类型，QPS 模式（1）或并发线程数模式（0）；默认QPS模式
+  + count：限流阈值
+    + QPS模式下，设置的是每秒查询率
+    + 并发线程模式下，设置的是并发线程数
+  + limitApp：流控针对的调用来源
+    + default：不区分来源
+    + {applicationName}：针对该来源，填应用名称
+    + other：针对其他来源
+  + strategy：调用关系限流策略
+
+#### 熔断降级规则
+
+#### 系统保护规则
+
+#### 来源访问控制规则
+
+#### 热点参数规则
+
+### 生产环境
+
++ 规则持久化
+
+  + 介绍
+
+    + 将`sentinel`与`nacos`结合，使用`nacos`数据源持久化规则
+    + 针对每种规则可以同时持久化到多个数据源
+    + 但是每种规则需要单独配置
+
+  + 用法
+
+    引入依赖
+
+    ```xml
+    <dependency>
+      <groupId>com.alibaba.csp</groupId>
+      <artifactId>sentinel-datasource-nacos</artifactId>
+    </dependency>
+    ```
+
+    应用中进行如下配置
+
+    ```properties
+    spring.cloud.sentinel.datasource.<ruleType>.nacos.server-addr=${spring.cloud.nacos.server-addr}
+    spring.cloud.sentinel.datasource.<ruleType>.nacos.dataId=${spring.application.name}-sentinel
+    spring.cloud.sentinel.datasource.ds.nacos.rule-type=flow
+    ```
+
+    + 其中`<ruleType>`可以是任意字符串，但是我觉得这里使用规则名称区分更好
+    + 配置后，在`nacos`配置管理中新增名称为`${spring.application.name}-sentinel`的配置，使用json配置规则，即可生效，并被持久化；使用`sentinel`控制台配置的，是没办法持久化的
+
++ 监控资源访问日志
+
+  >  参见：https://github.com/alibaba/Sentinel/wiki/%E5%9C%A8%E7%94%9F%E4%BA%A7%E7%8E%AF%E5%A2%83%E4%B8%AD%E4%BD%BF%E7%94%A8-Sentinel#%E7%9B%91%E6%8E%A7
+
+### RestTemplete支持
+
++ 声名`RestTemplete`的`blockhandler`
+
+  ```java
+  @Bean
+  @LoadBalanced
+  @SentinelRestTemplate(blockHandler = "handleException", blockHandlerClass = ExceptionUtil.class)
+  public RestTemplate restTemplate() {
+      return new RestTemplate();
+  }
+  ```
+
++ 异常处理类
+
+  ```java
+  public class ExceptionUtil {
+      public static SentinelClientHttpResponse handleException(HttpRequest request, byte[] body, ClientHttpRequestExecution execution, BlockException ex) {
+          return new SentinelClientHttpResponse("RestTemplate FallBack Msg");
+      }
+  }
+  ```
+
+### Feign支持
+
++ 引入依赖
+
+  ```xml
+  <dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-openfeign</artifactId>
+  </dependency>
+  ```
+
++ 配置文件
+
+  ```properties
+  feign.sentinel.enabled=true
+  ```
+
+### Getway支持
+
+> 参见：https://github.com/alibaba/Sentinel/wiki/%E7%BD%91%E5%85%B3%E9%99%90%E6%B5%81
+
+
+
+## Gateway
+
+### 依赖
+
+```xml
+<dependency>
+  <groupId>org.springframework.cloud</groupId>
+  <artifactId>spring-cloud-starter-gateway</artifactId>
+</dependency>
+```
+
+### 概念
+
++ Route（路由）
+
+  这是网关的基本构建块。它由一个 ID，一个目标 URI，一组断言和一组过滤器定义。如果断言为真，则路由匹配。
+
++ Predicate（断言）
+
+  这是一个`Java8`的`Predicate`。输入类型是一个``ServerWebExchange`。我们可以使用它来匹配来自 HTTP 请求的任何内容，例如 headers 或参数。
+
++ Filter（过滤器）
+
+  `GatewayFilter`的实例，我们可以使用它修改请求和响应。
+
+### 工作原理
+
+![image-20191224184441257](README.assets/image-20191224184441257.png) 
+
++ 请求进入`Gateway Handler Mapping`之后，根据`Predicate`匹配请求
++ 如果匹配成功，将请求交给`Gateway Web Handler`
++ `Gateway Web Handler`将请求经过过滤器链，然后将请求发给目标`url`
+
+### 配置路由
+
+> 配置路由可以通过`yml`配置，也可以通过`Bean`配置
+>
+> 推荐使用`yml`配置，可以通过配置中心修改
+
+#### 配置文件
+
+只有在`配置Bean`中能使用`与或非`逻辑
+
+```yml
+spring:
+  cloud:
+    gateway:
+      routes: # 下面可以配置多个路由
+      - id: neo_route # 这组路由id
+        uri: http://www.ityouknow.com # 转发地址
+        predicates: # 匹配规则集合（断言）
+        - Path=/spring-cloud
+```
+
+#### 配置Bean
+
+只有在`配置Bean`中能使用`与或非`逻辑
+
+```java
+@Bean
+public RouteLocator myRoutes(RouteLocatorBuilder builder) {
+  return builder.routes()
+    .route(p -> p
+           .path("/get") 
+           .uri("http://www.baidu.com"))
+    .build();
+}
+```
+
+### 断言
+
+`Predicate`是java8提供的方法，可以用于组装与或非判断
+
+`springcloud`提供了`RoutePredicateFactory`接口，基于该接口内置了以下几大类实现类
+
+#### 时间匹配
+
+##### AfterRoutePredicateFactory
+
++ 介绍
+
+  匹配某时间后发来的请求
+
++ yml
+
+  ```yml
+  spring:
+    cloud:
+      gateway:
+        routes:
+         - id: time_route
+          uri: http://ityouknow.com
+          predicates:
+           - After=2018-01-20T06:06:06+08:00[Asia/Shanghai]
+  ```
+
+##### BeforeRoutePredicateFactory
+
++ 介绍
+
+  匹配某时间之前发来的请求
+
++ yml
+
+  ```yml
+  spring:
+    cloud:
+      gateway:
+        routes:
+         - id: after_route
+          uri: http://ityouknow.com
+          predicates:
+           - Before=2018-01-20T06:06:06+08:00[Asia/Shanghai]
+  ```
+
+##### BetweenRoutePredicateFactory
+
++ 介绍
+
+  匹配某段时间内发来的请求
+
++ yml
+
+  ```yml
+  spring:
+    cloud:
+      gateway:
+        routes:
+         - id: after_route
+          uri: http://ityouknow.com
+          predicates:
+           - Between=2018-01-20T06:06:06+08:00[Asia/Shanghai], 2019-01-20T06:06:06+08:00[Asia/Shanghai]
+  ```
+
+#### Cookie匹配
+
++ 介绍
+
+  `CookieRoutePredicateFactory`接受两个参数：
+
+  第1个：cookie的name
+
+  第2个：正则表达式，用于匹配cookie的value
+
++ yml
+
+  ```yml
+  spring:
+    cloud:
+      gateway:
+        routes:
+         - id: cookie_route
+           uri: http://ityouknow.com
+           predicates:
+           - Cookie=ityouknow, kee.e
+  ```
+
+#### Header匹配
+
+`HeaderRoutePredicateFactory`同cookie匹配
+
+#### Host匹配
+
++ 介绍
+
+  `HostRoutePredicateFactory`接收一组参数，一组匹配的域名列表
+
++ yml
+
+  ```yml
+  spring:
+    cloud:
+      gateway:
+        routes:
+        - id: host_route
+          uri: http://ityouknow.com
+          predicates:
+          - Host=**.ityouknow.com
+  ```
+
+#### 请求方法匹配
+
++ 介绍
+
+  `MethodRoutePredicateFactory`请求方法匹配
+
++ yml
+
+  ```yml
+  spring:
+    cloud:
+      gateway:
+        routes:
+        - id: method_route
+          uri: http://ityouknow.com
+          predicates:
+          - Method=GET,POST
+  ```
+
+#### 请求路径匹配
+
++ 介绍
+
+  `PathRoutePredicateFactory`请求路径匹配
+
++ yml
+
+  ```yml
+  spring:
+    cloud:
+      gateway:
+        routes:
+        - id: host_route
+          uri: http://ityouknow.com
+          predicates:
+          - Path=/foo/{segment}
+  ```
+
+#### URL参数匹配
+
++ 介绍
+
+  `QueryRoutePredicateFactory`根据url中请求参数匹配，接受2个参数
+
+  第1个：请求参数名；只有1个参数时表示只要有这个参数即匹配成功
+
+  第2个：正则表达式，与属性值匹配
+
++ yml
+
+  ```yml
+  spring:
+    cloud:
+      gateway:
+        routes:
+        - id: query_route
+          uri: http://ityouknow.com
+          predicates:
+          - Query=smile
+  ```
+
+#### IP匹配
+
++ 介绍
+
+  `RemoteAddrRoutePredicateFactory`根据IP地址匹配
+
++ yml
+
+  ```yml
+  spring:
+    cloud:
+      gateway:
+        routes:
+        - id: remoteaddr_route
+          uri: http://ityouknow.com
+          predicates:
+          - RemoteAddr=192.168.1.1/24
+  ```
+
+#### 请求体匹配
+
+#### 服务名匹配
+
++ 介绍
+
+  `CloudFoundryRouteServiceRoutePredicateFactory`根据服务名称匹配
+
+  传了如下请求头，即匹配成功
+
+  ```java
+  /**
+  	 * Forwarded URL header name.
+  	 */
+  public static final String X_CF_FORWARDED_URL = "X-CF-Forwarded-Url";
+  
+  /**
+  	 * Proxy signature header name.
+  	 */
+  public static final String X_CF_PROXY_SIGNATURE = "X-CF-Proxy-Signature";
+  
+  /**
+  	 * Proxy metadata header name.
+  	 */
+  public static final String X_CF_PROXY_METADATA = "X-CF-Proxy-Metadata";
+  ```
+
+#### 权重匹配
+
+### 网关过滤器
+
+### 全局过滤器
+
+### 服务名路由
+
++ 将服务发现客户端集成到`gateway`网关中
+
++ 进行如下配置
+
+  该配置表示：是否与服务发现组件结合，通过`serviceId`转发到具体的服务实例。默认为`false`，设为 `true`便开启通过服务中心的自动根据`serviceId`创建路由的功能
+
+  ```yml
+  spring:
+    cloud:
+      gateway:
+        discovery:
+          locator:
+            enabled: true
+  ```
+
++ 此时可以通过`http://{网关ip}:{网关port}/{serverId}/xxx`访问`serverId`对应的服务上的接口
+
+  如：
+
+  `applicationName`为`cloud-customer`的服务上有1个路径为`/get`的接口，网关的地址为`http//localhost:10000`，此时可以通过`http://localhost:10000/cloud-customer/get`访问`cloud-customer`这个服上的`get`接口
+
+### 全局处理限流、熔断
+
+https://www.lagou.com/lgeduarticle/16005.html
+
+
+
+
+
+## 分布式事务
 
 
 
@@ -1113,6 +1934,124 @@ public class FeignFormatterRegister implements FeignFormatterRegistrar {
 ### 不扫描某类
 
 使用`@ComponentScan`注解的`excludeFilters`属性进行排除
+
+### 请求参数类型转换器
+
+> 参见：[SpringBoot中时间戳和LocalDate相关的接收和转换](https://www.hicode.club/articles/2019/09/24/1569335594436.html) 
+>
+> 经过测试，`springboot2.1.11`中`@RequestBody`接收`Instant`参数没有问题，下面不整理了
+
+#### @RequestParam和@PathVariable
+
++ `springboot2.1.11`中如下代码接收`Instant`类型参数时，会抛出异常提示找不到无参构造方法；但是在`springboot2.2.2`中已经不会有这个问题了
+
+  ```java
+  @GetMapping("/customer/name")
+  public String getCustomerName(@RequestParam Instant time){
+    // ...
+  }
+  ```
+
++ 解决
+
+  创建1个`string`转`Instant`的转换器
+
+  ```java
+  @Component
+  public class StringToInstantConverter implements Converter<String, Instant> {
+  
+      @Override
+      public Instant convert(@NonNull String source) {
+          source = source.trim();
+          try {
+              return Instant.parse(source);
+          } catch (Exception e) {
+              throw new RuntimeException(String.format("parser %s to Date fail", source));
+          }
+      }
+  }
+  ```
+
+  将这个转换器配置到`ConvertService`中
+
+  ```java
+  @Component
+  public class SpringContextListener implements ApplicationListener<ContextRefreshedEvent> {
+      @Resource
+      private ConversionService conversionService;
+      @Resource
+      private Set<Converter<?, ?>> converters;
+  
+      @Override
+      public void onApplicationEvent(@NonNull ContextRefreshedEvent contextRefreshedEvent) {
+          GenericConversionService gcs = (GenericConversionService) conversionService;
+          for (Converter<?, ?> converter : converters) {
+              gcs.addConverter(converter);
+          }
+      }
+  }
+  ```
+
+#### 不使用注解
+
++ `springboot2.1.11`中如下代码接收`Instant`类型参数时，同样会抛出异常提示找不到无参构造方法；但是在`springboot2.2.2`中已经不会有这个问题了
+
+  ```java
+  @GetMapping("/test2")
+  public Instant test3(Instant time){
+    return time;
+  }
+  ```
+
++ 解决
+
+  创建参数解析器
+
+  ```java
+  public class CustomizeArgumentResolverHandler {
+  
+      public static class InstantArgumentResolverHandler implements HandlerMethodArgumentResolver {
+  
+          @Override
+          public boolean supportsParameter(@NonNull MethodParameter parameter) {
+              return parameter.getParameterType().equals(Instant.class);
+          }
+  
+          @Override
+          public Object resolveArgument(@NonNull MethodParameter parameter, ModelAndViewContainer mavContainer,
+                                        @NonNull NativeWebRequest webRequest, WebDataBinderFactory binderFactory) {
+              final String parameterName = parameter.getParameterName();
+              if (parameterName == null){
+                  return null;
+              }
+              String timestamp = webRequest.getParameter(parameterName);
+              if(timestamp == null){
+                  return null;
+              }
+              return Instant.parse(timestamp);
+          }
+      }
+  }
+  ```
+
+  将这个参数解析器添加到`WebMvcConfigurer`中
+
+  ```java
+  @Configuration
+  public class WebMvcConfiguration implements WebMvcConfigurer {
+      /**
+       * 增加参数解析器
+       * 用于解决不使用注解直接接收某类型参数报没有无参构造方法的问题
+       * @param resolvers 已有解析器列表
+       */
+      @Override
+      public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
+          resolvers.add(new CustomizeArgumentResolverHandler.InstantArgumentResolverHandler());
+      }
+  }
+  ```
+
+  
 
 
 

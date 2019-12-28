@@ -1,0 +1,12 @@
+feign:
+    sentinel:
+        enabled: true
+spring:
+    cloud:
+        sentinel:
+            datasource:
+                ds:
+                    nacos:
+                        dataId: ${spring.application.name}-sentinel
+                        rule-type: flow
+                        server-addr: ${spring.cloud.nacos.server-addr}

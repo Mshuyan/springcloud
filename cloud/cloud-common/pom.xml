@@ -8,7 +8,6 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
     <artifactId>cloud-common</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
     <name>cloud-common</name>
 
     <dependencies>
@@ -27,6 +26,10 @@
         <dependency>
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba.csp</groupId>
+            <artifactId>sentinel-datasource-nacos</artifactId>
         </dependency>
         <dependency>
             <groupId>io.github.openfeign</groupId>

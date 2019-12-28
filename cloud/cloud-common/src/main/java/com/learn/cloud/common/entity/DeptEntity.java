@@ -3,7 +3,7 @@ package com.learn.cloud.common.entity;
 import lombok.Data;
 
 import java.io.Serializable;
-import java.util.Date;
+import java.time.Instant;
 
 /**
  * @author will
@@ -12,8 +12,8 @@ import java.util.Date;
 public class DeptEntity implements Serializable {
     private static final long serialVersionUID = -1369760518990842409L;
 
-    private Integer id = 1;
+    private Integer id;
 
-    private Date createTime = new Date();
+    private Instant time;
 
 }

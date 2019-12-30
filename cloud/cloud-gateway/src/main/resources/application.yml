@@ -8,3 +8,22 @@ spring:
       discovery:
         locator:
           enabled: true
+      routes:
+      - uri: lb://cloud-customer
+        predicates:
+        - Path=/clerk/**
+    sentinel:
+      filter:
+        enabled: false
+      scg:
+        fallback:
+          content-type: application/json;charset=UTF-8
+          mode: response
+          response-body: "{\"time\":\"2019-12-15T08:29:49.041Z\"}"
+
+logging:
+  level:
+    org.springframework.cloud.gateway: debug
+debug: true
+
+

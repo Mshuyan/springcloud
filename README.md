@@ -1280,7 +1280,7 @@ public class FeignFormatterRegister implements FeignFormatterRegistrar {
 
 + 解决方案
 
-  注册1个类型转换器，指定如何将Date类型转换为字符串
+  注册1个类型转换器，指定如何将Date类型转换为字符串，参见[Feign类型转换器](# Feign类型转换器) 
 
   另外建议使用`Instant`传递时间，而不是`Date`
 
@@ -1479,7 +1479,7 @@ public class FeignFormatterRegister implements FeignFormatterRegistrar {
 
     + 但是可以使用`@SentinelResource`注解的`defaultFallback`和`fallbackClass`属性使用同一个方法处理
 
-### 规则
+### *TODO 规则*
 
 > 参见：https://github.com/alibaba/Sentinel/wiki/%E5%A6%82%E4%BD%95%E4%BD%BF%E7%94%A8
 
@@ -1539,7 +1539,7 @@ public class FeignFormatterRegister implements FeignFormatterRegistrar {
     + 其中`<ruleType>`可以是任意字符串，但是我觉得这里使用规则名称区分更好
     + 配置后，在`nacos`配置管理中新增名称为`${spring.application.name}-sentinel`的配置，使用json配置规则，即可生效，并被持久化；使用`sentinel`控制台配置的，是没办法持久化的
 
-+ 监控资源访问日志
++ TODO 监控资源访问日志
 
   >  参见：https://github.com/alibaba/Sentinel/wiki/%E5%9C%A8%E7%94%9F%E4%BA%A7%E7%8E%AF%E5%A2%83%E4%B8%AD%E4%BD%BF%E7%94%A8-Sentinel#%E7%9B%91%E6%8E%A7
 
@@ -1583,11 +1583,89 @@ public class FeignFormatterRegister implements FeignFormatterRegistrar {
   feign.sentinel.enabled=true
   ```
 
-### Getway支持
+### Gateway支持
 
 > 参见：https://github.com/alibaba/Sentinel/wiki/%E7%BD%91%E5%85%B3%E9%99%90%E6%B5%81
 
++ 在gateway项目中引入如下依赖
 
+  ```xml
+  <dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-alibaba-sentinel-gateway</artifactId>
+  </dependency>
+  ```
+
++ bootstrap.yml
+
+  ```yml
+  spring:
+      cloud:
+          nacos:
+              server-addr: 192.168.1.204:8848
+          sentinel:
+              transport:
+                  dashboard: 192.168.1.204:8080
+  ```
+
++ application.yml
+
+  ```yml
+  spring:
+      cloud:
+          sentinel:
+              datasource:
+                  ds:
+                      nacos:
+                          dataId: ${spring.application.name}-sentinel
+                          rule-type: flow
+                          server-addr: ${spring.cloud.nacos.server-addr}
+              filter:
+              		enabled: false
+              scg:
+              		fallback:
+              				content-type: application/json;charset=UTF-8
+              				mode: response
+              				response-body: "{\"time\":\"2019-12-15T08:29:49.041Z\"}"
+  ```
+
++ 增加配置类
+
+  ```java
+  @Configuration
+  public class SentinelSupportConfig {
+  
+      @PostConstruct
+      public void doInit() {
+          // 定义资源分组
+          initCustomizedApis();
+          // 定义限流规则
+          initGatewayRules();
+      }
+  
+      private void initCustomizedApis() {
+          Set<ApiDefinition> definitions = new HashSet<>();
+          ApiDefinition api = new ApiDefinition("all_api")
+                  .setPredicateItems(new HashSet<ApiPredicateItem>() {
+                      private static final long serialVersionUID = -2458126303494500338L;
+                      {
+                      add(new ApiPathPredicateItem().setPattern("/**")
+                              .setMatchStrategy(SentinelGatewayConstants.URL_MATCH_STRATEGY_PREFIX));
+                  }});
+          definitions.add(api);
+          GatewayApiDefinitionManager.loadApiDefinitions(definitions);
+      }
+  
+      private void initGatewayRules() {
+          Set<GatewayFlowRule> rules = new HashSet<>();
+          rules.add(new GatewayFlowRule("all_api")
+                  .setCount(1)
+                  .setIntervalSec(1)
+          );
+          GatewayRuleManager.loadRules(rules);
+      }
+  }
+  ```
 
 ## Gateway
 
@@ -1637,13 +1715,14 @@ spring:
   cloud:
     gateway:
       routes: # 下面可以配置多个路由
-      - id: neo_route # 这组路由id
+      - id: neo_route # 这组路由id,默认值是UUID
         uri: http://www.ityouknow.com # 转发地址
+        order: 1  # 优先级，默认0，值越小越优先
         predicates: # 匹配规则集合（断言）
-        - Path=/spring-cloud
+        - Path=/spring-cloud/**
 ```
 
-#### 配置Bean
+#### 注册
 
 只有在`配置Bean`中能使用`与或非`逻辑
 
@@ -1652,11 +1731,20 @@ spring:
 public RouteLocator myRoutes(RouteLocatorBuilder builder) {
   return builder.routes()
     .route(p -> p
-           .path("/get") 
+           .path("/get/**") 
            .uri("http://www.baidu.com"))
     .build();
 }
 ```
+
+#### 参数说明
+
++ id：路由id，可以不指定，默认生成1个UUID
++ uri：目标服务的uri，必须指定，指定的内容仅限于uri，不可以包含路径（包含了也没用，还是会提取出uri替换请求网关的url中的uri）
+  + 这里可以指定具体的服务uri，如：`http://localhost:10200`
+  + 也可以以`lb://{serverId}`的形式指定服务名称
++ order：优先级，默认0，值越小越优先
++ predicates：断言数组
 
 ### 断言
 
@@ -1878,9 +1966,424 @@ public RouteLocator myRoutes(RouteLocatorBuilder builder) {
 
 #### 权重匹配
 
-### 网关过滤器
+### 过滤器
 
-### 全局过滤器
++ GatewayFilter
+
+  + 用于一组路由
+
+  + 也可以使用`spring.cloud.gateway.default-filters`配置到全局，此时与`GlobalFilter`效果就是一样的了，因为这个特性，我觉得自定义的时候全都使用`GatewayFilter`即可
+
+  + 需要在配置文件中进行配置生效，或将过滤器注册到`RouteLocator`中
+
++ GlobalFilter
+
+  + 用于所有路由
+
+  + 声明为`Bean`即可生效
+
+#### GatewayFilter
+
+`GatewayFilter`接口的实现类都是路由过滤器
+
+##### 配置过滤器
+
++ 注册
+
+  ```java
+  @Bean
+  public RouteLocator myRoutes(RouteLocatorBuilder builder) {
+    AbstractNameValueGatewayFilterFactory.NameValueConfig config = new AbstractNameValueGatewayFilterFactory.NameValueConfig();
+    config.setName("testHeader").setValue("testHeaderValue");
+    return builder.routes()
+      .route(p -> p
+             .path("/clerk/**")
+             .filters(f -> f.filter(new AddRequestHeaderGatewayFilterFactory().apply(config)))
+             .uri("lb://cloud-customer"))
+      .build();
+  }
+  ```
+
+  `xxxFilterFctory.apply()`返回的就是`GatewayFilter`的实现类
+
++ 配置文件（推荐）
+
+  ```yml
+  spring:
+    cloud:
+      gateway:
+        routes:
+        - uri: lb://cloud-customer
+          filters:
+          - AddRequestHeader=testHeader,testHeaderValue
+          predicates:
+          - Path=/clerk/**
+  ```
+
+  + AddRequestHeader
+
+    取自`AddRequestHeaderGatewayFilterFactory`的前半部分，取值规则来自于`spring`的如下约定
+
+  + 约定
+
+    在`yml`中配置`route`的`filter`时，如果要使用`xxxGatewayFilterFactory`这个过滤器工厂，可以忽略`GatewayFilterFactory`这几个字，直接使用`xxx`进行配置
+
+  + testHeader,testHeaderValue
+
+    这是过滤器工厂要使用的配置参数，都是以逗号分隔的，具体含义还得看过滤器工厂中`shortcutFieldOrder`方法的定义
+
+##### 自定义GatewayFilter
+
+> 自定义`GatewayFilter`的时候，有两种方法进行自定义
+>
+> + 实现`GatewayFilter`和`Order`接口，自定义过滤器
+>
+>   这种方式用于在java代码中将过滤器注册到`RouteLocator`
+>
+> + 继承`AbstractGatewayFilterFactory`，自定义过滤器工厂（推荐）
+>
+>   这种方式可以用于在java代码中将过滤器注册到`RouteLocator`，也可以在配置文件中配置过滤器
+>
+> 如果想将1个过滤器使用这两种方式都能配置，则两个都实现出来
+
+###### 自定义过滤器
+
+实现`GatewayFilter`和`Order`接口
+
+```java
+public class CustomizeGatewayFilter implements GatewayFilter, Ordered {
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        // chain.filter(exchange) 之前的代码，是执行下1个过滤器之前执行
+        System.out.println("customize gateway filter before");
+        return chain.filter(exchange).then(
+          			// then 里的代码是返回到这个过滤器的时候执行
+                Mono.fromRunnable(() -> {
+                    System.out.println("customize gateway filter after");
+                })
+        );
+    }
+
+    @Override
+    public int getOrder() {
+        return 0;
+    }
+}
+```
+
+使用：
+
++ 注册到`RouteLocator`
+
+  ```java
+  @Bean
+  public RouteLocator myRoutes(RouteLocatorBuilder builder) {
+    return builder.routes()
+      .route(p -> p
+             .path("/clerk/**")
+             .filters(f -> f.filter(new CustomizeGatewayFilter()))
+             .uri("lb://cloud-customer"))
+      .build();
+  }
+  ```
+
+###### 自定义过滤器工厂
+
+继承`AbstractGatewayFilterFactory`或其他几个他的子抽象类
+
+```java
+/**
+ * 必须注册到spring容器，否则使用配置文件配置时，spring找不到这个过滤器工厂
+ * @author shuyan
+ */
+@Component
+public class CustomizeGatewayFilterFactory extends AbstractGatewayFilterFactory<CustomizeGatewayFilterFactory.CustomizeConfig> {
+    /**
+     * 必须实现该构造方法，否则将抛出异常：无法进行类型转换
+     */
+    public CustomizeGatewayFilterFactory() {
+        super(CustomizeConfig.class);
+    }
+
+    /**
+     * + 如果需要向过滤器中设置一些参数，则必须重写该方法
+     * + 指定可以配置的参数的参数名列表，配置文件中指定的参数列表，会按照这里配置的顺序，被设置为CustomizeConfig中
+     *   对应属性的值
+     * + 当 yml 中配置的过滤器如下时：
+     *      filters:
+     *      - Customize=ball,basketBall,this basketBall
+     *   则: ball 会作为参数 key 的值，调用 setKey 方法设置到 CustomizeConfig中
+     *      basketBall 会作为参数 field 的值，调用 setField 方法设置到 CustomizeConfig中
+     *      ......
+     * @return 可配置的参数对应的key的列表
+     */
+    @Override
+    public List<String> shortcutFieldOrder() {
+        return Arrays.asList("key","field","value");
+    }
+
+    @Override
+    public GatewayFilter apply(CustomizeConfig config) {
+        return (exchange, chain) -> {
+            System.out.println("customize gateway filter before");
+            System.out.println(config.toString());
+            return chain.filter(exchange).then(
+                    Mono.fromRunnable(() -> {
+                        System.out.println("customize gateway filter after");
+                    })
+            );
+        };
+    }
+
+    @Data
+    @ToString
+    public static class CustomizeConfig{
+        private String key;
+        private String field;
+        private String value;
+    }
+}
+```
+
+使用
+
++ 配置文件（推荐）
+
+  ```yml
+  spring:
+    cloud:
+      gateway:
+        routes:
+        - uri: lb://cloud-customer
+          filters:
+          - Customize=ball,basketBall,this basketBall
+          predicates:
+          - Path=/clerk/**
+  ```
+
++ 注册
+
+  ```java
+  @Bean
+  public RouteLocator myRoutes(RouteLocatorBuilder builder) {
+    CustomizeGatewayFilterFactory.CustomizeConfig config = new CustomizeGatewayFilterFactory.CustomizeConfig();
+    config.setKey("ball");
+    config.setField("basketBall");
+    config.setValue("this basketBall");
+    return builder.routes()
+      .route(p -> p
+             .path("/clerk/**")
+             .filters(f -> f.filter(new CustomizeGatewayFilterFactory().apply(config)))
+             .uri("lb://cloud-customer"))
+      .build();
+  }
+  ```
+
+##### 内置GatewayFilter
+
+`gateway`中所有内置的`GatewayFilter`都是使用`GatewayFilterFactory`实现的；以下所有过滤器都是`GatewayFilterFactory`的实现类，对应的实现类是下面的过滤器名+`GatewayFilterFactory`
+
++ AddRequestHeader
+
+  用于添加请求头，可以将url中变量提取出来作为参数放在请求头中
+
++ AddRequestParameter
+
+  用于添加请求参数，可以将url中变量提取出来作为参数放在请求头中
+
++ AddResponseHeader
+
+  用于添加响应头，可以将url中变量提取出来作为参数放在响应头中
+
++ DedupeResponseHeader
+
+  用于删除指定的响应头中的重复值
+
+  输入两个参数：Header Name、Strategy【可选】
+
+  + Header Name 可以多个，用空格隔开
+  + `strategy` 可设置的值以及配置方式如下：
+    - RETAIN_FIRST：保留第一个值【默认】
+    - RETAIN_LAST：保留最后一个值
+    - RETAIN_UNIQUE：保留所有唯一值，以它们第一次出现的顺序保留
+
++ MapRequestHeader
+
+  用于将老的请求头的值作为1个新的请求头的值传递下去
+
+  输入两个参数：Header1、Header2，将上游 Header1 的值赋值到下游 Header2
+
++ PrefixPath
+
+  输入一个参数：prefix，在请求路径中添加前缀路径
+
++ PreserveHostHeader
+
+  发送原始 Host 请求头
+
++ RequestRateLimiter
+
+  限速过滤器（待研究）
+
++ RedirectTo
+
+  重定向过滤器
+
+  输入两个参数：Status Code、URL，将在 Response 中把 URL 赋值给 `Location` 属性，`status code`需要指定为300系列的状态码
+
++ RemoveHopByHopHeadersFilter
+
+  从转发的请求中删除标头
+
+  默认删除的 Headers 如下：
+
+  - Connection
+  - Keep-Alive
+  - Proxy-Authenticate
+  - Proxy-Authorization
+  - TE
+  - Trailer
+  - Transfer-Encoding
+  - Upgrade
+
+  如需更改此选项，配置 `spring.cloud.gateway.filter.remove-non-proxy-headers.headers` 即可
+
++ RemoveRequestHeader
+
+  输入一个参数：Header Name，请求下游前移除指定 Header
+
++ RemoveResponseHeader
+
+  输入一个参数：Header Name，下游请求完毕后移除 Response 指定 Header
+
++ RemoveRequestParameter
+
+  输入一个参数：Query Name，请求下游前移除指定 Query Name
+
++ RewritePath
+
+  重写请求路径
+
+  输入两个参数：正则表达式、替代值，匹配请求路径并按指定规则替换
+
++ RewriteLocationResponseHeader
+
+  重写`Location`响应头
+
++ RewriteResponseHeader
+
+  重写响应头
+
+  输入三个参数：Response Header Name、正则表达式、替换值，匹配指定 Response Header 的值并替换
+
++ SaveSession
+
++ SecureHeaders
+
++ SetPath
+
+  指定请求路径
+
+  输入一个参数：template，匹配 Spring Framework URI 路径模板并修改，允许多个匹配
+
++ SetRequestHeader
+
+  替换请求头
+
+  输入两个参数：Header Name、Value，设置指定的 Request Header 信息
+
++ SetResponseHeader
+
+  替换响应头
+
+  输入两个参数：Header Name、Value，设置指定的 Response Header 信息
+
++ SetStatus
+
+  指定返回状态码
+
++ StripPrefix
+
+  剥离前n级请求路径
+
+  输入一个参数：parts，parts 值为正整数
+
++ Retry
+
++ RequestSize
+
+  限制请求大小
+
+#### GlobalFilter
+
+##### 配置过滤器
+
+声名为bean
+
+```java
+@Bean
+public RemoveCachedBodyFilter removeCachedBodyFilter() {
+  return new RemoveCachedBodyFilter();
+}
+```
+
+##### 自定义GlobalFilter
+
++ 自定义过滤器
+
+  与`自定义GatewayFilter`一样，将`GatewayFilter`接口偷换为`GlobalFilter`即可
+
++ 全局过滤器没有工厂
+
+##### 内置GlobalFilter
+
+内置的全局过滤器都是`GlobalFilter`的实现类
+
++ ForwardRoutingFilter
+
+  `gateway`网关内部的请求转发
+
++ LoadBalancerClientFilter
+
+  结合ribbon实现负载均衡，针对转发路径为`lb://{serverid}`的请求
+
++ NettyRoutingFilter
+
+  根据请求的协议类型（http或https）使用httpClient转发请求
+
++ NettyWriteResponseFilter
+
+  将代理响应写回网关的客户端侧
+
++ RouteToRequestUrlFilter
+
+  用于转换请求路径
+
++ WebsocketRoutingFilter
+
+  根据请求的协议类型（ws或wss）使用`Spring Web Socket`转发请求
+
++ Gateway Metrics Filter
+
+  用于服务监控，可以与`普罗米修斯`整合
+
++ Marking An Exchange As Routed
+
+  最后1个路由标记这个请求已路由，防止重复路由
+
+### 跨域
+
+```yml
+spring:
+  cloud:
+    gateway:
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins: "https://docs.spring.io"
+            allowedMethods:
+            - GET
+```
 
 ### 服务名路由
 
@@ -1904,10 +2407,6 @@ public RouteLocator myRoutes(RouteLocatorBuilder builder) {
   如：
 
   `applicationName`为`cloud-customer`的服务上有1个路径为`/get`的接口，网关的地址为`http//localhost:10000`，此时可以通过`http://localhost:10000/cloud-customer/get`访问`cloud-customer`这个服上的`get`接口
-
-### 全局处理限流、熔断
-
-https://www.lagou.com/lgeduarticle/16005.html
 
 
 

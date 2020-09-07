@@ -233,7 +233,7 @@
 
 + 修改源码
 
-  + 将父`pom`中mysql版本修改为`8.0.17`
+  + 将父`pom`中mysql版本修改为`8.0.19`
 
   + 修改`MysqlHealthCheckProcessor.java`
 
@@ -243,7 +243,15 @@
     import com.mysql.cj.jdbc.MysqlDataSource;
     ```
 
-  + 在右侧`Maven Project`中点击`Excute Maven Goal`，输入`mvn -Prelease-nacos clean install -U`，点击`Excute`进行打包
+  + 修改`distribution/release-nacos.xml`文件
+
+    ```xml
+    <outputDirectory>/target/</outputDirectory>
+    <!-- 修改为 -->
+    <outputDirectory>./target/</outputDirectory>
+    ```
+
+  + 在右侧`Maven Project`中点击`Excute Maven Goal`，输入`mvn -Prelease-nacos -Dmaven.test.skip=true clean install -U`，点击`Excute`进行打包
 
     ![image-20191219215821750](README.assets/image-20191219215821750.png) 
 
@@ -1326,7 +1334,7 @@ public class FeignFormatterRegister implements FeignFormatterRegistrar {
 + 启动命令
 
   ```bash
-  nohup java -Dserver.port=8080 -Dcsp.sentinel.dashboard.server=localhost:8080 -Dproject.name=sentinel-dashboard -jar sentinel-dashboard-1.7.0.jar &
+  nohup java -Dserver.port=8719 -Dcsp.sentinel.dashboard.server=localhost:8080 -Dproject.name=sentinel-dashboard -jar sentinel-dashboard-1.7.0.jar &
   ```
 
   修改端口从启动命令中修改

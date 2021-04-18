@@ -2640,6 +2640,8 @@ spring:
 
 ### seata
 
+> 视频教程：https://www.bilibili.com/video/BV1BK411K792?p=17&spm_id_from=pageDriver
+
 #### 术语
 
 + 事务协调者（TC）
@@ -2663,9 +2665,280 @@ spring:
 
 #### TC服务搭建
 
+##### 文件介绍
 
++ 下载地址：https://github.com/seata/seata/releases
 
-#### AT模式（推荐）
+  当前使用`1.4.1`版本
+
++ 文件介绍
+
+  + bin：脚本
+  + conf：配置文件
+    + file.conf：服务端事务日志存储方式配置（使用配置中心时不需要该文件）
+    + logback.xml：日志配置
+    + registry.config：注册中心、配置中心相关配置
+  + lib：依赖库
+
++ registry.conf
+
+  ```conf
+  registry {
+    # file 、nacos 、eureka、redis、zk、consul、etcd3、sofa
+    type = "nacos"
+    loadBalance = "RandomLoadBalance"
+    loadBalanceVirtualNodes = 10
+  
+    nacos {
+      application = "seata-server"
+      serverAddr = "127.0.0.1:8848"
+      group = "SEATA_GROUP"
+      # 这里必须是命名空间id
+      namespace = ""
+      # 所属集群，参见事务分组，配置中心配置的 vgroup-mapping 的value需包含该集群名称
+      cluster = "default"
+      username = ""
+      password = ""
+    }
+  }
+  
+  config {
+    # file、nacos 、apollo、zk、consul、etcd3
+    type = "nacos"
+  
+    nacos {
+      serverAddr = "127.0.0.1:8848"
+      # 这里必须是命名空间id
+      namespace = ""
+      group = "SEATA_GROUP"
+      username = ""
+      password = ""
+    }
+  }
+  ```
+
++ 脚本文件
+
+  + 下载地址：https://github.com/seata/seata/tree/1.4.1/script
+
+  + 文件介绍
+
+    + **client**：
+
+      客户端配置及sql
+
+      + **at:** 
+
+        AT模式下的 `undo_log` 建表语句
+
+      + **conf:** 
+
+        客户端的配置文件
+
+      + **saga:** 
+
+        SAGA 模式下所需表的建表语句
+
+      + **spring:** 
+
+        SpringBoot 应用支持的配置文件
+
+    + **config-center**
+
+      用于存放各种配置中心的初始化脚本，执行时都会读取 `config.txt`配置文件，并写入配置中心
+
+      + **nacos:** 
+
+        用于向 Nacos 中添加配置
+
+      + **zk:**
+
+         用于向 Zookeeper 中添加配置，脚本依赖 Zookeeper 的相关脚本，需要手动下载；ZooKeeper相关的配置可以写在 `zk-params.txt` 中，也可以在执行的时候输入
+
+      + **apollo:** 
+
+        向 Apollo 中添加配置，Apollo 的地址端口等可以写在 `apollo-params.txt`，也可以在执行的时候输入
+
+      + **etcd3:** 
+
+        用于向 Etcd3 中添加配置
+
+      + **consul:** 
+
+        用于向 consul 中添加配置
+
+    + **server：**
+
+      存放server侧所需SQL和部署脚本
+
+      + **db:** 
+
+        server 侧的保存模式为 `db` 时所需表的建表语句
+
+      + **docker-compose:** 
+
+        server 侧通过 docker-compose 部署的脚本
+
+      + **helm:** 
+
+        server 侧通过 Helm 部署的脚本
+
+      + **kubernetes:**
+
+         server 侧通过 Kubernetes 部署的脚本
+
+      + **config**
+
+        服务端配置文件，同安装包中`conf`目录
+
++ 启动脚本
+
+  + -h：指定在注册中心注册的IP，一般多IP时使用
+  + -p：端口，默认8091
+  + -m：事务日志存储方式，在配置中心已指定，不需要单独制定
+  + -n：指定server节点数
+  + -e：指定运行环境，如 `dev`, `test` 等, 服务启动时会使用 `registry-dev.conf` 这样的配置
+
+##### 部署
+
++ 下载并执行`server/db`下sql脚本
+
++ 启动nacos注册中心
+
+  + 修改`config-center/config.txt`如下部分
+
+    ```
+    # 此处非常重要，配置事务分组与集群映射关系
+    service.vgroupMapping.lbcx_tx_group=default
+    store.mode=db
+    store.db.datasource=druid
+    store.db.dbType=mysql
+    store.db.driverClassName=com.mysql.cj.jdbc.Driver
+    store.db.url=jdbc:mysql://127.0.0.1:3306/seata?useUnicode=true
+    store.db.user=root
+    store.db.password=123456
+    ```
+
+  + 创建名为`seata`的命名空间
+
+  + 执行`config-center/nacos`下脚本，把上面配置导入nacos
+
+    ```sh
+    bash nacos-config.sh  -h http://127.0.0.1 -p 8848 -t 5422c2bf-4c61-4d67-9142-2017955fa86b -u nacos -w nacos
+    # -t 命名空间id
+    ```
+
+    在nacos配置列表中能够看到上传的配置即为成功
+
++ 配置`registry.conf`文件
+
++ 部署
+
+  下列方式部署后，在nacos服务列表中能够看到服务即为成功
+
+  + 直接启动
+
+    + 使用启动脚本启动
+
+  + docker部署
+
+    + `registry.conf`文件中nacos的ip需要做映射
+
+    + 环境变量
+
+      + **SEATA_IP**：指定在注册中心注册的IP，一般多IP时使用
+      + **SEATA_PORT**：端口，默认8091
+      + **STORE_MODE**：事务日志存储方式，在配置文件中已指定，不需要单独制定
+      + **SERVER_NODE**：指定server节点数
+      + **SEATA_ENV**：指定运行环境，如 `dev`, `test` 等, 服务启动时会使用 `registry-dev.conf` 这样的配置
+      + **SEATA_CONFIG_NAME**：指定配置文件位置, 如 `file:/root/registry`, 将会加载 `/root/registry.conf` 作为配置文件
+
+    + docker run启动
+
+      ```
+      docker run --name seata-server \
+              -p 8091:8091 \
+              -e SEATA_CONFIG_NAME=file:/root/seata-config/registry \
+              -v /User/seata/config:/root/seata-config seataio/seata-server
+      ```
+
+    + docker-compose启动
+
+      ```
+      version: "3"
+      services:
+        seata-server:
+          image: seataio/seata-server
+          hostname: seata-server
+          ports:
+            - "8091:8091"
+          environment:
+            - SEATA_CONFIG_NAME=file:/root/seata-config/registry
+          volumes:
+            - /User/seata/config:/root/seata-config:seataio/seata-server
+      ```
+
+  + k8s部署
+
+    参见：https://seata.io/zh-cn/docs/ops/deploy-by-kubernetes.html
+
+##### 服务监控
+
+参见：https://seata.io/zh-cn/docs/ops/operation.html
+
+#### springcloud集成
+
++ 依赖
+
+  ```xml
+  // 官方推荐 seata-spring-boot-starter 单独引用最新版
+  <dependency>
+      <groupId>com.alibaba.cloud</groupId>
+      <artifactId>spring-cloud-starter-alibaba-seata</artifactId>
+      <exclusions>
+          <exclusion>
+              <groupId>io.seata</groupId>
+              <artifactId>seata-spring-boot-starter</artifactId>
+          </exclusion>
+      </exclusions>
+  </dependency>
+  <dependency>
+      <groupId>io.seata</groupId>
+      <artifactId>seata-spring-boot-starter</artifactId>
+  </dependency>
+  ```
+
++ application.yml
+
+  ```yaml
+  # 这里nacos配置需要单独配一遍
+  seata:
+    registry:
+      type: nacos
+      nacos:
+        namespace: '141a2480-7f7a-4e10-b47d-96b94adad15a'
+    config:
+      type: nacos
+      nacos:
+        namespace: '141a2480-7f7a-4e10-b47d-96b94adad15a'
+    tx-service-group: lbcx_tx_group
+  ```
+
++ 执行客户端建表语句
+
+  `client/at/db`下对应脚本
+
+#### API
+
++ `GloabalTransactional`：全局事务开启、提交、回滚
++ `GlobalTransactionContext`：获取`GloabalTransactional`的上下文；`reload`方法用于统一处理失败的事务
++ `TransactionalTemplate`：事务模板
++ `RootContext`：绑定解绑事务id，解绑可以看作事务挂起，绑定可以看作事务恢复
++ `@GloabalTransactional`：TM使用该注解控制全局事务；底层通过切面进入方法时开启事务，退出方法时提交或回滚
+
+#### 事务模式
+
+##### AT模式（推荐）
 
 + 与XA模式区别在于
 
@@ -2685,7 +2958,7 @@ spring:
 
 + 需要回滚流程
 
-  + 本地事务需要回滚时，会查看是否有其他事务是由本地锁并且在等待全局锁，如果是，则回滚失败并不断尝试，直到其他事物获取全局锁超时
+  + 本地事务需要回滚时，如果其他事物获取了本地锁，但是在等待全局锁，由于当前事务持有全局锁，在等待本地锁，此时会出现死锁，只能等待获取全局锁超时，本地锁释放出来，当前事务才能回滚
 
   ![Write-Isolation: Rollback](assets/TB1xW0UwubviK0jSZFNXXaApXXa-718-521.png) 
 
@@ -2699,71 +2972,101 @@ spring:
   + TM告知TC提交/回滚全局事务
   + TC通知RM各自执行`commit/rollback`操作，同时清除`undo_log`
 
-+ 
 
-#### TCC模式
+##### TCC模式
 
+略
 
+##### SAGA模式
 
-#### SAGA模式
+略
 
+##### XA模式
 
-
-#### XA模式
+略
 
 + 图示
 
   ![image-20210406224754480](assets/image-20210406224754480.png) 
 
+#### 事务分组
 
++ 官方说明
 
+  1. 事务分组是什么？ 
 
+     事务分组是seata的资源逻辑，类似于服务实例。在file.conf中的my_test_tx_group就是一个事务分组。
 
+  2. 通过事务分组如何找到后端集群？ 
 
+     首先程序中配置了事务分组（GlobalTransactionScanner 构造方法的txServiceGroup参数），程序会通过用户配置的配置中心去寻找service.vgroupMapping .事务分组配置项，取得配置项的值就是TC集群的名称。拿到集群名称程序通过一定的前后缀+集群名称去构造服务名，各配置中心的服务名实现不同。拿到服务名去相应的注册中心去拉取相应服务名的服务列表，获得后端真实的TC服务列表。
 
+  3. 为什么这么设计，不直接取服务名？
 
+      这里多了一层获取事务分组到映射集群的配置。这样设计后，事务分组可以作为资源的逻辑隔离单位，当发生故障时可以快速failover。
 
++ 配置项
 
+  + 配置中心必须配置`service.vgroupMapping.分组名=集群名`
 
+  + 服务端`registry.conf`的`registry.nacos.cluster`属性必须是上面配置的1个集群
+  + 客户端必须通过`seata.tx-service-group`配置使用哪个分组
 
++ 理解
 
+  类似于命名空间，不同分组/集群下的事务相互隔离
 
++ 案例
 
+  + 异地容灾
 
+    ![image-20210417015055997](assets/image-20210417015055997.png) 
 
+  + 多应用接入
 
+    ![image-20210417015129132](assets/image-20210417015129132.png) 
 
+  + 根据服务器性能规划
 
+    ![image-20210417015250680](assets/image-20210417015250680.png) 
 
+  + 预发布与生产环境隔离
 
+    + 可以将预发布和生产划分为两个集群，使用同一套数据库
 
+    + 生产与预发环境都是用生产环境数据库，所以`lock`表两个环境必须共用，其余两张表需要区分
 
+      生产：global_table、branch_table
 
+      预发：global_table_pre、branch_table_pre
 
+    + 服务端配置
 
+      + 配置中心
 
+        ```
+        # 需要指定表名
+        store.db.globalTable = "global_table"  ----> 预发为 "global_table_pre"
+        store.db.branchTable = "branch_table"  ----> 预发为 "branch_table_pre"
+        store.db.lockTable = "lock_table"
+        ```
 
+      + registry.conf
 
+        需要通过`cluster`属性区分所属集群
 
+    ![image-20210417020829797](assets/image-20210417020829797.png) 
 
+#### 隔离级别
 
+默认读未提交，出现脏读时，可以使用`select ... for update` + `@GlobalTransictional`保证不会出现脏读
 
+#### 表介绍
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
++ undo_log：回滚日志
++ global_table：全局事务信息
++ branch_table：每个RM的分支事务信息
++ lock_table：锁表信息
 
 
 

@@ -3102,6 +3102,10 @@ spring:
 
 ### SkyWalking
 
+> 参考资料：[中文文档](https://skyapm.github.io/document-cn-translation-of-skywalking/zh/8.0.0/) 
+>
+> 视频教程：https://www.bilibili.com/video/BV1ZJ411s7Mn 
+
 #### 架构
 
 ![image-20210418175159935](assets/image-20210418175159935.png) 
@@ -3119,12 +3123,367 @@ spring:
 + 断点：接口
 + 实例：1个服务部署多份，每份就是1个实例
 
-#### 服务搭建
+#### 安装
 
-> 官方推荐使用ES存储数据，提前准备好es环境，注意版本
+> + 官方推荐使用ES存储数据，提前准备好es环境，注意版本
+> + 下载：https://skywalking.apache.org/downloads/
 
-+ 下载：https://skywalking.apache.org/downloads/
-+ 
+##### 目录结构
+
++ PaxHeaders.X
+
+  linux压缩包解压出来有可能会出现该目录，不用管
+
++ apache-skywalking-apm-bin-es7
+
+  + **agent**
+
+    本地代理模块（探针）
+
+    + activations
+    + bootstrap-plugins：启动插件
+    + **config**：配置文件
+    + logs：日志
+    + optional-plugins：可选插件
+    + optional-reporter-plugins：可选上报插件
+    + plugins：插件
+    + skywalking-agent.jar
+
+  + **bin**
+
+    收集器（服务端）启动脚本
+
+  + **config**
+
+    收集器（服务端）配置文件
+
+  + oap-libs
+
+    收集器（服务端）依赖库
+
+  + tools
+
+    当服务出问题时，使用该工具采集信息并提交issue
+
+    参见：[backend-profile-export](https://skyapm.github.io/document-cn-translation-of-skywalking/zh/8.0.0/guides/backend-profile-export.html) 
+
+  + **webapp**
+
+    UI界面
+
+  + **logs**
+
+    启动服务后生成的日志文件
+
+##### 搭建
+
++ nacos创建`skywalking`命名空间
++ 进行必要的配置
++ 使用`bin`目录下`startup`脚本启动
+
+#### 配置
+
+##### 服务端
+
++ `config/application.yml`
+
+  ```yaml
+  # 修改注册中心
+  cluster:
+    selector: ${SW_CLUSTER:nacos}
+    nacos:
+      hostPort: ${SW_CLUSTER_NACOS_HOST_PORT:localhost:8848}
+      namespace: ${SW_CLUSTER_NACOS_NAMESPACE:"skywalking"}
+  # 修改数据源
+  storage:
+    selector: ${SW_STORAGE:elasticsearch7}
+  elasticsearch7:
+    clusterNodes: ${SW_STORAGE_ES_CLUSTER_NODES:wsl.local:9200}
+  # 修改配置中心
+  cluster:
+    selector: ${SW_CLUSTER:nacos}
+    nacos:
+      serverAddr: ${SW_CONFIG_NACOS_SERVER_ADDR:127.0.0.1}
+      port: ${SW_CONFIG_NACOS_SERVER_PORT:8848}
+      group: ${SW_CONFIG_NACOS_SERVER_GROUP:skywalking}
+      namespace: ${SW_CONFIG_NACOS_SERVER_NAMESPACE:skywalking}
+  ```
+
++ `webapp/webapp.yml`
+
+  ```yaml
+  # 修改端口
+  server:
+    port: 9080
+  ```
+
+##### 客户端（探针）
+
++ `agent/config/agent.config`
+
+  ```properties
+  
+  ```
+
+#### 端口
+
++ UI端口：默认8080，可以`webapp/webapp.yml`中修改
++ HTTP端口：默认12800，如需修改，`config/application.yml`和`agent/config/agent.config`均需修改
++ RPC端口：默认11800，如需修改，`config/application.yml`和`agent/config/agent.config`均需修改
+
+#### 探针（agent）使用
+
+启动应用程序时加上如下两个参数：
+
++ `-javaagent`：用于指定`agent\skywalking-agent.jar`文件路径
+
++ `-Dskywalking.agent.service_name`：用于指定`skywalking`界面上显示的服务名称
+
++ `-Dskywalking.collector.backend_service`：指定`skywalking`服务端地址，默认`127.0.0.1:11800`
+
++ 例
+
+  ```
+  -javaagent:E:\workspace\LBCX\code\skywalking\agent\skywalking-agent.jar 
+  -Dskywalking.agent.service_name=Server2
+  -Dskywalking.collector.backend_service=127.0.0.1:11800
+  ```
+
+#### 界面使用
+
++ 仪表盘：查看被监控服务的运行状态
+
+  + APM：服务信息
+    + Global
+      + Services load：服务每分钟请求数
+      + Slow Services：慢响应服务，单位ms
+      + Un-Health services(Apdex):Apdex性能指标，1为满分。
+      + Global Response Latency：百分比响应延时，不同百分比的延时时间，单位ms
+      + Global Heatmap：服务响应时间热力分布图，根据时间段内不同响应时间的数量显示颜色深度
+    + Service
+      + Service Apdex（数字）:当前服务的评分 
+      + Service Apdex（折线图）：不同时间的Apdex评分
+      + Successful Rate（数字）：请求成功率
+      + Successful Rate（折线图）：不同时间的请求成功率
+      + Servce Load（数字）：每分钟请求数
+      + Servce Load（折线图）：不同时间的每分钟请求数
+      + Service Avg Response Times：平均响应延时，单位ms
+      + Global Response Time Percentile：百分比响应延时
+      + Servce Instances Load：每个服务实例的每分钟请求数
+      + Show Service Instance：每个服务实例的最大延时
+      + Service Instance Successful Rate：每个服务实例的请求成功率
+    + Instance
+      + Service Instance Load：当前实例的每分钟请求数
+      + Service Instance Successful Rate：当前实例的请求成功率
+      + Service Instance Latency：当前实例的响应延时
+      + JVM CPU:jvm占用CPU的百分比
+      + JVM Memory：JVM内存占用大小，单位m
+      + JVM GC Time：JVM垃圾回收时间，包含YGC和OGC
+      + JVM GC Count：JVM垃圾回收次数，包含YGC和OGC
+      + CLR XX：类似JVM虚拟机，这里用不上就不做解释了
+    + Endpoint
+      +  Endpoint Load in Current Service：每个端点的每分钟请求数
+      + Slow Endpoints in Current Service：每个端点的最慢请求时间，单位ms
+      + Successful Rate in Current Service：每个端点的请求成功率
+      + Endpoint Load：当前端点每个时间段的请求数据
+      + Endpoint Avg Response Time：当前端点每个时间段的请求行响应时间
+      + Endpoint Response Time Percentile：当前端点每个时间段的响应时间占比
+      + Endpoint Successful Rate：当前端点每个时间段的请求成功率
+  + Database
+    + Database Avg Response Time：当前数据库事件平均响应时间，单位ms
+    + Database Access Successful Rate：当前数据库访问成功率
+    + Database Traffic：CPM，当前数据库每分钟请求数
+    + Database Access Latency Percentile：数据库不同比例的响应时间，单位ms
+    + Slow Statements：前N个慢查询，单位ms
+    + All Database Loads：所有数据库中CPM排名
+    + Un-Health Databases：所有数据库健康排名，请求成功率排名
+
++ 拓扑图：以拓扑图的方式展现服务直接的关系，并以此为入口查看相关信息
+
+  + 查看单个服务相关内容
+
+    ![image-20210419000315310](assets/image-20210419000315310.png) 
+
+  + 服务间连接情况
+
+    ![image-20210419000356946](assets/image-20210419000356946.png) 
+
+  + Create Group：分组展示
+
+  + 告警信息
+
+    ![image-20210419000522698](assets/image-20210419000522698.png) 
+
+  + 服务端点追踪信息
+
+    ![image-20210419002714528](assets/image-20210419002714528.png) 
+
+  + 不知道这个指标干嘛的，以后补上
+
+    ![image-20210419000604673](assets/image-20210419000604673.png) 
+
+  + 服务实例性能信息
+
+    ![image-20210419000639122](assets/image-20210419000639122.png) 
+
+  + api信息面板
+
+    ![image-20210419000713902](assets/image-20210419000713902.png) 
+
+  + Service ApdexScore
+
+    服务评分
+
+  + 平均SLA
+
+    平均可用性
+
+  + Service Throughput
+
+    吞吐量
+
++ 追踪：以接口列表的方式展现，追踪接口内部调用过程
+
++ 性能剖析：单独端点进行采样分析，并可查看堆栈信息
+
++ 告警：触发告警的告警列表，包括实例，请求超时等。
+
+#### 配置覆盖
+
++ 探针配置文件中配置，可以通过多种途径进行配置
+
+  探针配置 > 系统配置 > 环境变量 > 配置文件
+
++ 探针配置
+
+  + 在`-javaageng:/path/to/skywalking-agent.jar`后使用等号配置，多个配置使用`,`分割
+
+  + 例
+
+    ```
+    -javaagent:/path/to/skywalking-agent.jar=agent.service_name=server1
+    ```
+
++ 系统配置：jvm参数指定
+
++ 环境变量：配置文件中配置项的值都是`${环境变量:默认值}`方式，在环境变量中配置该值指定
+
++ 配置文件
+
+#### 获取追踪ID
+
++ 当用户请求出错时，可以把追踪id进行展示，让用户提供这个id，我们可以快速定位查看信息
+
++ 项目中引入依赖
+
+  ```xml
+  <dependency>
+      <groupId>org.apache.skywalking</groupId>
+      <artifactId>apm-toolkit-trace</artifactId>
+      <version>8.5.0</version>
+  </dependency>
+  ```
+
++ API
+
+  + 使用`TraceContext.traceId()`获取追踪id
+  + 使用`ActiveSpan`在链路上打印日志
+
+#### 过滤端点
+
++ 例如`swagger`接口是不需要监控的，需要过滤掉
++ 将`agent/optional-plugins/apm-trace-ignore-plugin-8.5.0.jar`插件拷贝到`agent/plugins`下
++ 配置探针配置项`trace.ignore_path`为指定路径
+
+#### 告警功能
+
++ 配置文件：`config/alarm-setting.yml`
+
+  ```yaml
+  rules:
+    # 规则名称唯一，必须以_rule结尾
+    service_resp_time_rule:
+      # 监控指标
+      metrics-name: service_resp_time
+      # 比较符号
+      op: ">"
+      # 阈值，单位ms
+      threshold: 1000
+      # 检查周期，单位min
+      period: 10
+      # 超过阈值次数
+      count: 3
+      # 多长时间内不重复发送，单位min
+      silence-period: 5
+      message: Response time of service {name} is more than 1000ms in 3 minutes of last 10 minutes.
+    service_sla_rule:
+      # Metrics value need to be long, double or int
+      metrics-name: service_sla
+      op: "<"
+      threshold: 8000
+      # The length of time to evaluate the metrics
+      period: 10
+      # How many times after the metrics match the condition, will trigger alarm
+      count: 2
+      # How many times of checks, the alarm keeps silence after alarm triggered, default as same as period.
+      silence-period: 3
+      message: Successful rate of service {name} is lower than 80% in 2 minutes of last 10 minutes
+    service_resp_time_percentile_rule:
+      # Metrics value need to be long, double or int
+      metrics-name: service_percentile
+      op: ">"
+      threshold: 1000,1000,1000,1000,1000
+      period: 10
+      count: 3
+      silence-period: 5
+      message: Percentile response time of service {name} alarm in 3 minutes of last 10 minutes, due to more than one condition of p50 > 1000, p75 > 1000, p90 > 1000, p95 > 1000, p99 > 1000
+    service_instance_resp_time_rule:
+      metrics-name: service_instance_resp_time
+      op: ">"
+      threshold: 1000
+      period: 10
+      count: 2
+      silence-period: 5
+      message: Response time of service instance {name} is more than 1000ms in 2 minutes of last 10 minutes
+    database_access_resp_time_rule:
+      metrics-name: database_access_resp_time
+      threshold: 1000
+      op: ">"
+      period: 10
+      count: 2
+      message: Response time of database access {name} is more than 1000ms in 2 minutes of last 10 minutes
+    endpoint_relation_resp_time_rule:
+      metrics-name: endpoint_relation_resp_time
+      threshold: 1000
+      op: ">"
+      period: 10
+      count: 2
+      message: Response time of endpoint relation {name} is more than 1000ms in 2 minutes of last 10 minutes
+  #  Active endpoint related metrics alarm will cost more memory than service and service instance metrics alarm.
+  #  Because the number of endpoint is much more than service and instance.
+  #
+  #  endpoint_avg_rule:
+  #    metrics-name: endpoint_avg
+  #    op: ">"
+  #    threshold: 1000
+  #    period: 10
+  #    count: 2
+  #    silence-period: 5
+  #    message: Response time of endpoint {name} is more than 1000ms in 2 minutes of last 10 minutes
+  
+  # 回调钩子
+  webhooks:
+  #  - http://127.0.0.1/notify/
+  #  - http://127.0.0.1/go-wechat/
+  ```
+
+  + 一般规则不用修改，只需要实现回调接口，并**配置回调钩子**即可
+
++ 实现回调接口
+
+#### gateway支持
+
+agent默认不支持gateway，需要将`agent/optional-plugins/apm-spring-cloud-gateway-xxx.jar`文件拷贝进`agent/plugins`下
 
 ## 技巧
 
